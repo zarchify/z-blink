@@ -256,8 +256,8 @@ export type StatImport = {
 	read path: ExprString,
 	read extra: {
 		read kind: "all",
-		--- as name
 		read star: Identifier,
+		--- as name
 		read into_scope: Identifier?,
 	} | {
 		read kind: "destructured",

@@ -70,6 +70,20 @@ export type function Drop(union: type, value: type)
 	return types.unionof(table.unpack(components))
 end
 
+export type function Pick(union: type, tag: type)
+	for _, variant in union:components() do
+		const kind = variant:readproperty(types.singleton("kind"))
+		if kind == nil then
+			error("all variants must have a kind property")
+		end
+
+		if kind:issubtypeof(tag) then
+			return variant
+		end
+	end
+	return types.unknown
+end
+
 export type function NonNil(t: type)
 	if not t:is("union") then
 		return t

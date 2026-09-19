@@ -98,7 +98,7 @@ end
 
 local function decl_scope(scope: Scope, stat: ast.StatScope): types.Scope
 	return {
-		id = stat.body.id :: ScopeId,
+		id = stat.id :: ScopeId,
 		kind = "scope",
 		node = stat,
 		name = stat.name.value,
