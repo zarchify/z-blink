@@ -20,6 +20,7 @@ local STRINGS = {
 	write = { "Write", "write", "write" },
 	write_to = { "WriteTo", "writeTo", "write_to" },
 	step_replication = { "StepReplication", "stepReplication", "step_replication" },
+	set_violation_handler = { "SetViolationHandler", "setViolationHandler", "set_violation_handler" },
 }
 
 export type Method = keyof<typeof(STRINGS)>

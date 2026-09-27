@@ -16,6 +16,7 @@ local cased_method = require("@self/cased_method")
 local constant = require("@lir/build/builders/constant")
 local globals = require("@lir/build/builders/globals")
 local hir = require("@hir")
+local limits = require("@config/limits")
 local lir = require("@compiler/lir")
 local md5 = require("@vendor/md5")
 local options = require("@config/options")
@@ -762,6 +763,13 @@ local function gen_export(ctx: Context, target: compilation.Target, export: lir.
 			append_method(ctx, casing, "step_replication", ctx.lir.client.step_replication)
 		elseif target == "server" then
 			append_method(ctx, casing, "step_replication", ctx.lir.server.step_replication)
+			builder:append_indent()
+			builder:append(cased_method(casing, "set_violation_handler"))
+			builder:append(" = function(handler: ((player: Player, reason: string) -> ())?)\n")
+			builder:indent()
+			builder:append_line("violation_handler = handler")
+			builder:dedent()
+			builder:append_line("end,")
 		end
 
 		builder:append_line("exports = {")
@@ -907,7 +915,7 @@ local function from_lir(props: Props, target: compilation.Target): string
 		if target == "client" then
 			append_client(builder, reliable_name, unreliable_name)
 		elseif target == "server" then
-			append_server(builder, reliable_name, unreliable_name)
+			append_server(builder, reliable_name, unreliable_name, limits.resolve(entry_options, hhir.strict))
 		end
 	end
 
@@ -937,7 +945,13 @@ local function from_lir(props: Props, target: compilation.Target): string
 			builder:append(".")
 			builder:append(signal_name)
 			builder:append(":Connect(")
+			if target == "server" then
+				builder:append("guard_receive(")
+			end
 			gen_anon_fn(ctx, (target_fns :: { [string]: any })[key])
+			if target == "server" then
+				builder:append(")")
+			end
 			builder:append(")\n")
 		end
 

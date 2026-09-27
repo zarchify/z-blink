@@ -51,6 +51,12 @@ local options = {
 	manual_replication = { kind = "boolean" :: "boolean" },
 	strict = { kind = "boolean" :: "boolean" },
 	remote_scope = { kind = "string" :: "string" },
+
+	max_packet_bytes = { kind = "number" :: "number" },
+	max_packet_instances = { kind = "number" :: "number" },
+	max_packets_per_second = { kind = "number" :: "number" },
+	max_records_per_packet = { kind = "number" :: "number" },
+	max_records_per_second = { kind = "number" :: "number" },
 }
 
 export type FileOptions = MakeOptionsReal<typeof(options)>

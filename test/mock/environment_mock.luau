@@ -25,6 +25,7 @@ return function(data_model: DataModelMock?): Environment
 		assert = assert,
 		task = task,
 		math = math,
+		os = os,
 		table = table,
 		buffer = buffer,
 		vector = vector,

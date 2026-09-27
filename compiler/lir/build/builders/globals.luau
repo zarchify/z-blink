@@ -23,6 +23,8 @@ return table.freeze({
 	connections_map = global("connections"),
 	invocations_map = global("invocations"),
 	invocations_bitset = global<<number>>("invocations_bitset"),
+	dispatching = global<<boolean>>("dispatching"),
+	admit_record = global<<(any) -> boolean>>("admit_record"),
 
 	services = {
 		players = global<<Players>>("PLAYERS"),

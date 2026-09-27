@@ -279,10 +279,19 @@ const function call_listener(
 	block: Builder,
 	call_type: index<hir.Event, "call">,
 	listener: types.Writeable<any>,
-	values: { read Readable<any> }
+	values: { read Readable<any> },
+	flag_dispatch: boolean?
 )
 	if call_type == "SingleSync" or call_type == "ManySync" then
+		if flag_dispatch then
+			block:store(constant.truth, globals.dispatching)
+		end
+
 		block:call(projection.call(listener, values))
+
+		if flag_dispatch then
+			block:store(constant.from_value(false), globals.dispatching)
+		end
 	else
 		block:call(library.task.spawn(listener, values))
 	end
@@ -673,7 +682,7 @@ local function build_event_receive(ctx: Context, side: Side, block: fn.Builder, 
 	if call == "SingleSync" or call == "SingleAsync" then
 		local connection = projection.field(CONNECTIONS, constant.from_value(event_id))
 		block:if_single(condition.not_equals(connection, constant.null), function(block)
-			call_listener(block, call, connection, values)
+			call_listener(block, call, connection, values, side == "Server")
 			block:ccontinue()
 		end)
 	elseif call == "ManySync" or call == "ManyAsync" then
@@ -681,7 +690,7 @@ local function build_event_receive(ctx: Context, side: Side, block: fn.Builder, 
 		local is_connected = condition.greater_than(unary.len(connections), constant.zero)
 		block:if_single(is_connected, function(block)
 			block:for_generic(connections, function(block, _, connection)
-				call_listener(block, call, connection, values)
+				call_listener(block, call, connection, values, side == "Server")
 			end)
 
 			block:ccontinue()
@@ -942,6 +951,13 @@ local function build_receive_connection(ctx: Context, side: Side, receivables: {
 		end
 
 		block:while_loop(loop_condition, function(block)
+			if is_server then
+				local admitted = projection.call(globals.admit_record, { block:parameter(1) })
+				block:if_single(condition.equals(admitted, constant.from_value(false)), function(block)
+					block:rreturn({})
+				end)
+			end
+
 			local read_event_id = block:store(library.buffer.u8.read(control.advance(constant.one)))
 			block:if_chain(n_receivables + 1, function(index)
 				if index > n_receivables then

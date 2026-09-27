@@ -36,6 +36,7 @@ local tests = tiniest.collect_tests(function()
 	describe_from_file("policy")
 	describe_from_file("determinism")
 	describe_from_file("hostile")
+	describe_from_file("transport")
 
 	describe("issues", function()
 		require("./issues/90.test")(tiniest)
