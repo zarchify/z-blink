@@ -273,12 +273,14 @@ local function check(config: Config): { Problem }
 
 		if on_disk == nil then
 			table.insert(problems, { kind = "missing", path = key, contract = output.contract })
+		elseif on_disk == output.contents then
+			if recorded == nil then
+				table.insert(problems, { kind = "untracked", path = key, contract = output.contract })
+			end
 		elseif recorded and hash(on_disk) ~= recorded.hash then
 			table.insert(problems, { kind = "edited", path = key, contract = output.contract })
-		elseif on_disk ~= output.contents then
+		else
 			table.insert(problems, { kind = "stale", path = key, contract = output.contract })
-		elseif recorded == nil then
-			table.insert(problems, { kind = "untracked", path = key, contract = output.contract })
 		end
 	end
 

@@ -173,8 +173,9 @@ return function(tiniest: Tiniest)
 		end).fails_with("interrupted")
 
 		expect(project.exists(driver.JOURNAL_NAME)).is(true)
-		const problems = kinds(driver.check(project.config()))
-		expect(string.find(problems, "interrupted", 1, true) ~= nil).is(true)
+		expect(kinds(driver.check(project.config()))).is(
+			"interrupted:blink.journal.toml,untracked:out/net/client.luau,missing:out/net/server.luau"
+		)
 
 		const report = driver.generate(project.config())
 		expect(report.recovered).is(true)
