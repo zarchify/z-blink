@@ -23,7 +23,7 @@ return function(tiniest: Tiniest)
 		@export
 		type unit = vector(0..1)
 	]],
-		{ profile = "test" }
+		{ profile = "test", strict = false }
 	)
 	const targets_path = write_targets("issue94", targets)
 

@@ -49,6 +49,7 @@ local options = {
 	},
 
 	manual_replication = { kind = "boolean" :: "boolean" },
+	strict = { kind = "boolean" :: "boolean" },
 }
 
 export type FileOptions = MakeOptionsReal<typeof(options)>

@@ -104,7 +104,7 @@ local function compile_functions(events: Functions): Targets
 	assert(fs.write_string_to_file(blink_file_path, contents).ok, "blink file write failed")
 
 	return compiler.compile_contents(contents, {
-		profile = "test",
+		profile = "test", strict = false,
 	})
 end
 

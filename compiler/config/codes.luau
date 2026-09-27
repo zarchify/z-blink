@@ -47,8 +47,13 @@ type_checking.ExtraAttributeParameters = next_id()
 type_checking.DuplicateUnionType = next_id()
 type_checking.ExportRequiresConcreteType = next_id()
 
+local policy = {}
+policy.Violation = next_category()
+policy.InvalidOpaque = next_id()
+
 return table.freeze({
 	parser = parser,
 	analysis = analysis,
 	type_checking = type_checking,
+	policy = policy,
 })

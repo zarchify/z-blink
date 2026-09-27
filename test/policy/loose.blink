@@ -1,0 +1,2 @@
+option strict = false
+type name = string

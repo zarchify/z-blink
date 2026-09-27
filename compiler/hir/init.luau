@@ -9,6 +9,7 @@ local flattening = require("@hir/analysis/flattening")
 local format = require("@self/format")
 local instantiation = require("@hir/analysis/instantiation")
 local lookup = require("@self/lookup")
+local policy = require("@hir/analysis/policy")
 local type_checking = require("@hir/analysis/type_checking")
 local types = require("@self/types")
 
@@ -22,12 +23,13 @@ export type DeclId = types.DeclId
 export type ScopeId = types.ScopeId
 export type Hir = types.Hir
 
-local function hir_from_files(files: compilation.Files, profile: compilation.Profile): Hir
+local function hir_from_files(files: compilation.Files, profile: compilation.Profile, strict: boolean?): Hir
 	local hir = build.from_files(files, profile)
 	instantiation.instantiate(hir)
 	dereferencing.dereference(hir)
 	flattening.flatten(hir)
 	type_checking.type_check(hir)
+	policy.enforce(hir, files, strict)
 	return hir
 end
 

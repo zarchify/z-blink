@@ -1,0 +1,3 @@
+option strict = false
+from "./loose" import *
+event e = { from: Client, type: Reliable, call: SingleSync, data: name }

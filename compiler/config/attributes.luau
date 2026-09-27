@@ -4,6 +4,7 @@ export type Attributes = {
 	export: true?,
 	target: compilation.Target?,
 	profile: compilation.Profile?,
+	opaque: true?,
 }
 
 return nil

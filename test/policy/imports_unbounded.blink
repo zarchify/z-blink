@@ -1,0 +1,2 @@
+from "./unbounded" import *
+event e = { from: Client, type: Reliable, call: SingleSync, data: name }

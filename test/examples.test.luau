@@ -22,7 +22,7 @@ return function(tiniest: Tiniest)
 
 		test(file_name, function()
 			expect(function()
-				const result = compiler.compile_from_path(file_path, { profile = "test" })
+				const result = compiler.compile_from_path(file_path, { profile = "test", strict = false })
 				if result.ok == false then
 					error(result.error)
 				end

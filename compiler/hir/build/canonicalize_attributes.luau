@@ -94,6 +94,8 @@ local function canonicalize_attributes(nodes: AttributeNodes): Attributes
 			value = attr_profile(attribute)
 		elseif name == "target" then
 			value = attr_target(attribute)
+		elseif name == "opaque" then
+			value = attr_any(attribute)
 		else
 			weak_exhaustive_match(name)
 			return report.invalid_attribute(attribute)

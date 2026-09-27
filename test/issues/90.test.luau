@@ -23,7 +23,7 @@ return function(tiniest: Tiniest)
 		@export
 		type health = u8(0..100)
 	]],
-		{ profile = "test" }
+		{ profile = "test", strict = false }
 	)
 	const targets_path = write_targets("issue90", targets)
 

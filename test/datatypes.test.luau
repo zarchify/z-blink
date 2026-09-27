@@ -53,7 +53,7 @@ local function compile_datatypes(file: string, types: { [string]: Datatype }): T
 
 		local contents = builder:finalize()
 		local compiled_targets = compiler.compile_contents(contents, {
-			profile = "test",
+			profile = "test", strict = false,
 		})
 		source = compiled_targets.types
 

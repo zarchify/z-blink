@@ -39,7 +39,7 @@ type function ParseTypeNames(source: type)
 end
 
 const function setup_test<T>(prefix: string, contents: T | "")
-	const targets = compiler.compile_contents(contents, { profile = "test" })
+	const targets = compiler.compile_contents(contents, { profile = "test", strict = false })
 	const source = targets.types
 
 	const file_name = `{prefix}-validation`

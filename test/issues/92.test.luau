@@ -15,7 +15,7 @@ return function(tiniest: Tiniest)
 		event reliable = {from: Server, type: Reliable, call: SingleSync}
 		event unreliable = {from: Server, type: Unreliable, call: SingleSync}
 	]],
-		{ profile = "test" }
+		{ profile = "test", strict = false }
 	)
 	const targets_path = write_targets("issue92", targets)
 
