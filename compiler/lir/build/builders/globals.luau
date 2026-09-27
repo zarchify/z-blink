@@ -26,6 +26,9 @@ return table.freeze({
 	dispatching = global<<boolean>>("dispatching"),
 	admit_record = global<<(any) -> boolean>>("admit_record"),
 	after_record = global<<(number, number) -> ()>>("after_record"),
+	admit_queue = global<<(any, number) -> boolean>>("admit_queue"),
+	admit_invocation = global<<(any) -> boolean>>("admit_invocation"),
+	finish_invocation = global<<(any) -> ()>>("finish_invocation"),
 	out_records = global<<number>>("out_records"),
 
 	services = {

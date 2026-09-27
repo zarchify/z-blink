@@ -57,6 +57,8 @@ local options = {
 	max_packets_per_second = { kind = "number" :: "number" },
 	max_records_per_packet = { kind = "number" :: "number" },
 	max_records_per_second = { kind = "number" :: "number" },
+	max_queue_size = { kind = "number" :: "number" },
+	max_active_invocations = { kind = "number" :: "number" },
 }
 
 export type FileOptions = MakeOptionsReal<typeof(options)>

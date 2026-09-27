@@ -214,6 +214,101 @@ return function(tiniest: Tiniest)
 		expect(#session.violations).is(0)
 	end)
 
+	const function invoke_async(session: Session, name: string, ...: any): () -> (boolean, any)
+		local done, ok, result = false, false, nil
+		const args = table.pack(...)
+		task.spawn(function()
+			ok, result = pcall(session.client.exports[name].invoke, table.unpack(args, 1, args.n))
+			done = true
+		end)
+
+		return function()
+			session.client.step_replication()
+			session.server.step_replication()
+			local waited = 0
+			while not done and waited < 2 do
+				waited += task.wait()
+				session.client.step_replication()
+				session.server.step_replication()
+			end
+
+			expect(done).is(true)
+			return ok, result
+		end
+	end
+
+	test("invoking a function with no server handler fails instead of hanging", function()
+		const session = start([[
+			option manual_replication = true
+			function lookup = { data: u8, return: u8 }
+		]])
+		const ok, result = invoke_async(session, "lookup", 1)()
+		expect(ok).is(false)
+		expect(string.find(tostring(result), "Server encountered an error", 1, true) ~= nil).is(true)
+	end)
+
+	test("a handler returning invalid data fails the invocation instead of hanging", function()
+		const session = start([[
+			option manual_replication = true
+			function lookup = { data: u8, return: u8 }
+		]])
+		session.server.exports.lookup.on(function()
+			return 300
+		end)
+
+		const ok = invoke_async(session, "lookup", 1)()
+		expect(ok).is(false)
+	end)
+
+	test("active invocations per player are limited", function()
+		const session = start([[
+			option manual_replication = true
+			option max_active_invocations = 2
+			function slow = { data: u8, return: u8 }
+		]])
+		local release = false
+		session.server.exports.slow.on(function(_, value: number)
+			while not release do
+				task.wait()
+			end
+			return value
+		end)
+
+		const first = invoke_async(session, "slow", 1)
+		const second = invoke_async(session, "slow", 2)
+		const third = invoke_async(session, "slow", 3)
+
+		const third_ok = third()
+		expect(third_ok).is(false)
+		expect_violation(session, "active invocations")
+
+		release = true
+		expect((first())).is(true)
+		expect((second())).is(true)
+		expect((invoke_async(session, "slow", 4)())).is(true)
+	end)
+
+	test("event queues are capped when no listener drains them", function()
+		const session = start([[
+			option manual_replication = true
+			option max_queue_size = 3
+			event pending = { from: Client, type: Reliable, call: Polling, data: u8 }
+		]])
+		for index = 1, 5 do
+			session.client.exports.pending.fire(index)
+		end
+		session.client.step_replication()
+
+		local drained = 0
+		for _ in session.server.exports.pending.iter() do
+			drained += 1
+		end
+
+		expect(drained).is(3)
+		expect(#session.violations).is(2)
+		expect(string.find(session.violations[1], "event queue is full", 1, true) ~= nil).is(true)
+	end)
+
 	test("a single record larger than the packet limit errors on the client", function()
 		const session = start([[
 			option manual_replication = true

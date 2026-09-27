@@ -8,6 +8,8 @@ export type Limits = {
 	read packets_per_second: number?,
 	read records_per_packet: number?,
 	read records_per_second: number?,
+	read queue_size: number?,
+	read active_invocations: number?,
 }
 
 --- Defaults applied to strict contracts. They are deliberately generous so that legitimate
@@ -18,6 +20,8 @@ const STRICT_DEFAULTS: Limits = table.freeze({
 	packets_per_second = 600,
 	records_per_packet = 256,
 	records_per_second = 3000,
+	queue_size = 1024,
+	active_invocations = 16,
 })
 
 const NO_LIMITS: Limits = table.freeze({})
@@ -32,6 +36,8 @@ local function resolve(entry_options: FileOptions, strict: boolean): Limits
 		packets_per_second = entry_options.max_packets_per_second or defaults.packets_per_second,
 		records_per_packet = entry_options.max_records_per_packet or defaults.records_per_packet,
 		records_per_second = entry_options.max_records_per_second or defaults.records_per_second,
+		queue_size = entry_options.max_queue_size or defaults.queue_size,
+		active_invocations = entry_options.max_active_invocations or defaults.active_invocations,
 	})
 end
 

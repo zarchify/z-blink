@@ -186,6 +186,14 @@ local function copy_outgoing_buffer(block: fn.Builder): types.RegisterId<buffer>
 	return new_buffer
 end
 
+--- Writes a reply telling the client that its invocation failed.
+local function write_failure_reply(block: fn.Builder, id: Readable<number>, invocation_id: Readable<number>)
+	state.reset_outgoing(block)
+	block:call(library.buffer.u8.write(block:allocate(constant.one), id))
+	block:call(library.buffer.u8.write(block:allocate(constant.one), invocation_id))
+	block:call(library.buffer.u8.write(block:allocate(constant.one), constant.zero))
+end
+
 local function toggle_bitset_index(block: fn.Builder, index: Readable<number>, bitset: Readable<number>?)
 	local modified_bitset = library.bit32.bxor(bitset or INVOCATIONS_BITSET, binary.pow(constant.two, index))
 	block:store(modified_bitset, INVOCATIONS_BITSET)
@@ -700,6 +708,17 @@ local function build_event_receive(ctx: Context, side: Side, block: fn.Builder, 
 	end
 
 	-- insert into queue
+	if side == "Server" then
+		local pending = binary.sub(
+			projection.index(queue, constant.from_value("size")),
+			projection.index(queue, constant.from_value("row"))
+		)
+		local admitted = projection.call(globals.admit_queue, { block:parameter(1), pending })
+		block:if_single(condition.equals(admitted, constant.falsity), function(block)
+			block:ccontinue()
+		end)
+	end
+
 	local size_index = projection.index(queue, constant.from_value("size"))
 	local size = block:store(binary.add(size_index, constant.one))
 	local columns = block:store(projection.index(queue, constant.from_value("columns")))
@@ -884,50 +903,74 @@ local function build_function_receive(ctx: Context, side: Side, block: fn.Builde
 			data_values[index] = register
 		end
 
+		local player = block:store(block:parameter(1))
+		local is_admitted = projection.call(globals.admit_invocation, { player })
+		local can_run = condition.aand(condition.not_equals(callback, constant.null), is_admitted)
+
 		block:if_chain(2, function(index)
 			if index == 1 then
-				return condition.equals(callback, constant.null),
+				return can_run,
 					function(block: fn.Builder)
-						block:call(library.buffer.u8.write(block:allocate(constant.one), id))
-						block:call(library.buffer.u8.write(block:allocate(constant.one), invocation_id))
-						block:call(library.buffer.u8.write(block:allocate(constant.one), constant.zero))
+						block:call(library.task.spawn(
+							fn.anonymous({}, {}, function(block)
+								block:capture({ callback, player, invocation_id, unpack(data_values) })
+
+								local pcall_values =
+									block:store_mult(library.pcall(callback, player, unpack(data_values)), #rreturn + 1)
+
+								block:call(projection.call(globals.finish_invocation, { player }))
+
+								local player_save = block:store(projection.field(globals.players_map, player))
+								block:if_single(condition.equals(player_save, constant.null), function(block)
+									block:rreturn({})
+								end)
+
+								local status = block:store(
+									ternary(
+										condition.equals(pcall_values[1], constant.truth),
+										constant.one,
+										constant.zero
+									)
+								)
+
+								const write_reply = fn.anonymous({}, {}, function(block)
+									block:capture({ invocation_id, status, unpack(pcall_values) })
+									state.reset_outgoing(block)
+									block:call(library.buffer.u8.write(block:allocate(constant.one), id))
+									block:call(library.buffer.u8.write(block:allocate(constant.one), invocation_id))
+									block:call(library.buffer.u8.write(block:allocate(constant.one), status))
+
+									block:if_single(condition.equals(status, constant.one), function(block)
+										for index, fn_set in return_fn_sets do
+											block:call_fn(fn_set.write, { pcall_values[index + 1] }, {})
+										end
+									end)
+								end)
+
+								local reply_values = block:store_mult(library.pcall(write_reply), 2)
+								block:if_single(condition.equals(reply_values[1], constant.falsity), function(block)
+									write_failure_reply(block, id, invocation_id)
+									block:call(
+										library.task.spawn(globals.create("error"), { reply_values[2], constant.zero })
+									)
+								end)
+
+								local new_buffer = copy_outgoing_buffer(block)
+								state.update_save(block, player_save, new_buffer, OUTGOING.cursor)
+							end) :: any,
+							{}
+						))
 					end
 			end
 
-			return condition.not_equals(callback, constant.null),
+			return condition.equals(constant.truth, constant.truth),
 				function(block: fn.Builder)
-					local player = block:store(block:parameter(1))
-					block:call(library.task.spawn(
-						fn.anonymous({}, {}, function(block)
-							block:capture({ callback, player, invocation_id, unpack(data_values) })
-
-							local pcall_values =
-								block:store_mult(library.pcall(callback, player, unpack(data_values)), #rreturn + 1)
-
-							local player_save = block:store(projection.field(globals.players_map, player))
-							block:if_single(condition.equals(player_save, constant.null), function(block)
-								block:rreturn({})
-							end)
-
-							local was_successful = condition.equals(pcall_values[1], constant.truth)
-							local success_value = ternary(was_successful, constant.one, constant.zero)
-
-							state.reset_outgoing(block)
-							block:call(library.buffer.u8.write(block:allocate(constant.one), id))
-							block:call(library.buffer.u8.write(block:allocate(constant.one), invocation_id))
-							block:call(library.buffer.u8.write(block:allocate(constant.one), success_value))
-
-							block:if_single(was_successful, function(block)
-								for index, fn_set in return_fn_sets do
-									block:call_fn(fn_set.write, { pcall_values[index + 1] }, {})
-								end
-							end)
-
-							local new_buffer = copy_outgoing_buffer(block)
-							state.update_save(block, player_save, new_buffer, OUTGOING.cursor)
-						end) :: any,
-						{}
-					))
+					local player_save = block:store(projection.field(globals.players_map, player))
+					block:if_single(condition.not_equals(player_save, constant.null), function(block)
+						write_failure_reply(block, id, invocation_id)
+						local new_buffer = copy_outgoing_buffer(block)
+						state.update_save(block, player_save, new_buffer, OUTGOING.cursor)
+					end)
 				end
 		end)
 	else
