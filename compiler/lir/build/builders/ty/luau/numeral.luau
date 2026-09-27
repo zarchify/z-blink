@@ -1,4 +1,5 @@
 local attributes = require("@config/attributes")
+local default_bounds = require("@config/bounds")
 local ty = require("@ty")
 local types = require("@lir/types")
 
@@ -40,6 +41,9 @@ type WriteCtor = (cursor: Register<number>, value: Readable<number>) -> Call<nil
 
 local BYTE = constant.from_value(2 ^ 8)
 local SHORT = constant.from_value(2 ^ 16)
+
+local F64_MAX = 1.7976931348623157e308
+local F32_MAX = 3.4028234663852886e38
 
 local function size_to_byte_size(size: ty.NumSize): number
 	if size == "8" then
@@ -135,17 +139,56 @@ local function write_i48(block: Builder, value: Readable<number>)
 	write_u48(block, register)
 end
 
-local function validate(block: Builder, ty: ty.Numeral, value: Readable<number>)
-	local bounds = ty.bounds
-	if bounds == nil then
-		return
-	end
+local function validate_finite(block: Builder, value: Readable<number>, limit: number)
+	block:if_single(condition.not_equals(value, value), function(block: fn.Builder)
+		block:call(library.error("Expected a finite number, got NaN"))
+	end)
 
+	local outside = condition.oor(
+		condition.less_than(value, constant.from_value(-limit)),
+		condition.greater_than(value, constant.from_value(limit))
+	)
+
+	block:if_single(outside, function(block: fn.Builder)
+		local message = library.string.format(`Expected a finite number within {limit}, number is %*`, value)
+		block:call(library.error_rvalue(message))
+	end)
+end
+
+local function validate(ctx: Context, block: Builder, ty: ty.Numeral, value: Readable<number>, is_write: boolean)
 	const format = ty.format
+	local bounds = ty.bounds
+
 	if format == "f" then
-		block:if_single(condition.not_equals(value, value), function(block: fn.Builder)
-			block:call(library.error("Expected a finite number, got NaN"))
-		end)
+		if ctx.hir.strict then
+			validate_finite(block, value, if is_write and ty.size == "32" then F32_MAX else F64_MAX)
+		elseif bounds ~= nil then
+			block:if_single(condition.not_equals(value, value), function(block: fn.Builder)
+				block:call(library.error("Expected a finite number, got NaN"))
+			end)
+		end
+
+		if bounds == nil then
+			return
+		end
+	else
+		if bounds == nil then
+			if not is_write then
+				return
+			end
+
+			bounds = (default_bounds :: any)[`{format}{ty.size}`]
+			if bounds == nil then
+				return
+			end
+		end
+
+		if is_write then
+			block:if_single(condition.not_equals(binary.mod(value, constant.one), constant.zero), function(block)
+				local message = library.string.format("Expected an integer, number is %*", value)
+				block:call(library.error_rvalue(message))
+			end)
+		end
 	end
 
 	local lower = condition.less_than(value, constant.from_value(bounds.min))
@@ -166,31 +209,33 @@ end
 
 local function build_read(props: ReadProps, block: Builder, ty: ty.Numeral, into: Writeable<any>?): Register<number>
 	local format = (ty.format .. ty.size) :: NumeralKinds
+	local register: Register<number>
 	if format == "u24" then
-		return read_u24(block, into)
+		register = read_u24(block, into)
 	elseif format == "i24" then
-		return read_i24(block, into)
+		register = read_i24(block, into)
 	elseif format == "u48" then
-		return read_u48(block, into)
+		register = read_u48(block, into)
 	elseif format == "i48" then
-		return read_i48(block, into)
+		register = read_i48(block, into)
+	else
+		local size = size_to_byte_size(ty.size)
+		local bytes = constant.from_value(size)
+
+		local cursor = control.advance(bytes)
+		local methods = methods_from_numeral(ty)
+
+		register = block:store(methods.read(cursor), into)
 	end
 
-	local size = size_to_byte_size(ty.size)
-	local bytes = constant.from_value(size)
-
-	local cursor = control.advance(bytes)
-	local methods = methods_from_numeral(ty)
-
-	local register = block:store(methods.read(cursor), into)
-	validate(block, ty, register)
+	validate(props.ctx, block, ty, register, false)
 
 	return register
 end
 
 local function build_write(props: WriteProps, block: Builder, ty: ty.Numeral, value: Readable<number>)
 	if props.validate then
-		validate(block, ty, value)
+		validate(props.ctx, block, ty, value, true)
 	end
 
 	local format = (ty.format .. ty.size) :: NumeralKinds

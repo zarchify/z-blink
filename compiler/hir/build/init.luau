@@ -568,6 +568,7 @@ local function from_files(files: compilation.Files, profile: compilation.Profile
 		scopes = entry_decls.scopes,
 		options = {},
 		entry_scope = entry_scope,
+		strict = true,
 	}
 
 	-- record all file options

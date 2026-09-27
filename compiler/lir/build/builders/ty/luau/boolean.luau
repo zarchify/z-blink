@@ -47,7 +47,18 @@ local function build_read(
 	local advance = control.advance(bytes)
 	local buffer_read = library.buffer.u8.read(advance)
 
-	local truthful = condition.equals(buffer_read, constant.from_value(1))
+	local byte = block:store(buffer_read)
+	local is_invalid = condition.aand(
+		condition.not_equals(byte, constant.from_value(0)),
+		condition.not_equals(byte, constant.from_value(1))
+	)
+
+	block:if_single(is_invalid, function(block)
+		local message = library.string.format("Expected a boolean byte of 0 or 1, got %d", byte)
+		block:call(library.error_rvalue(message))
+	end)
+
+	local truthful = condition.equals(byte, constant.from_value(1))
 	local conversion = ternary(truthful, constant.from_value(true), constant.from_value(false))
 
 	return block:store(conversion, into)

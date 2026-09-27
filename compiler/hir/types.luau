@@ -85,6 +85,8 @@ export type Hir = {
 	--- [file_id]: FileOptions
 	read options: { [number]: options.FileOptions? },
 	read entry_scope: Scope,
+	--- whether the contract policy is enforced, set by the policy pass
+	strict: boolean,
 }
 
 export type Decls = {

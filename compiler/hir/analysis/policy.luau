@@ -260,6 +260,7 @@ end
 
 const function enforce(hir: Hir, files: compilation.Files, requested: boolean?)
 	const strict = is_strict(hir, files, requested)
+	hir.strict = strict
 	check_strict_options(hir, files, strict)
 
 	if not strict then

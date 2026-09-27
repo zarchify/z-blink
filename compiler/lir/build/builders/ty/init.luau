@@ -185,7 +185,12 @@ builders.map = table.freeze({
 
 		block:for_numeric(len, function(block)
 			local key = read_ty(props, block, map.index) :: Register<any>
-			read_ty(props, block, map.value, projection.field(register, key))
+			local entry = projection.field(register, key)
+			block:if_single(condition.not_equals(entry, constant.null), function(block)
+				block:call(library.error("Duplicate map key"))
+			end)
+
+			read_ty(props, block, map.value, entry)
 		end)
 
 		if into then
@@ -226,9 +231,27 @@ builders.array = table.freeze({
 		return register
 	end,
 	write = function(props: WriteProps, block: Builder, array: ty.Array, value: Readable<{ any }>): ()
-		length.write(props, block, array, unary.len(value))
-		block:for_generic(value, function(block, _, value)
-			write_ty(props, block, array.of, value)
+		local len = block:store(unary.len(value))
+		if props.validate then
+			local entries = block:store(constant.zero)
+			block:for_generic(value, function(block)
+				block:store(binary.add(entries, constant.one), entries)
+			end)
+
+			block:if_single(condition.not_equals(entries, len), function(block)
+				local message = library.string.format(
+					"Expected an array without gaps or extra keys, it has %d entries but a length of %d",
+					entries,
+					len
+				)
+				block:call(library.error_rvalue(message))
+			end)
+		end
+
+		length.write(props, block, array, len)
+		block:for_numeric(len, function(block, index)
+			local element = block:store(projection.field(value, index))
+			write_ty(props, block, array.of, element)
 		end)
 	end,
 }) :: TyBuilder
@@ -261,7 +284,35 @@ builders.struct = table.freeze({
 		return struct_register
 	end,
 
-	write = function(props: WriteProps, block: Builder, struct: ty.Struct, value: Readable<any>): ()
+	write = function(props: WriteProps, block: Builder, struct: ty.Struct, value: Readable<any>, tag: string?): ()
+		if props.validate then
+			block:if_single(condition.not_equals(library.typeof(value), constant.from_value("table")), function(block)
+				local message = library.string.format("Expected a table, got %s", library.typeof(value))
+				block:call(library.error_rvalue(message))
+			end)
+
+			local allowed: { string } = {}
+			for _, field in struct.fields do
+				table.insert(allowed, field.name)
+			end
+
+			if tag then
+				table.insert(allowed, tag)
+			end
+
+			block:for_generic(value, function(block, key)
+				local is_unknown: types.Condition<boolean> = condition.not_equals(key, constant.null)
+				for _, name in allowed do
+					is_unknown = condition.aand(is_unknown, condition.not_equals(key, constant.from_value(name)))
+				end
+
+				block:if_single(is_unknown, function(block)
+					local message = library.string.format("Unexpected field %s", library.tostring(key))
+					block:call(library.error_rvalue(message))
+				end)
+			end)
+		end
+
 		for _, field in struct.fields do
 			local name = field.name
 			local struct_index = projection.field(value, constant.from_value(name))
@@ -330,7 +381,7 @@ builders.discriminated_union = table.freeze({
 			return is_variant,
 				function(block: Builder)
 					ty_numeral.write(props, block, format, variant_index)
-					builders.struct.write(props, block, variant_value, value)
+					builders.struct.write(props, block, variant_value, value, enum.tag)
 				end
 		end)
 	end,
