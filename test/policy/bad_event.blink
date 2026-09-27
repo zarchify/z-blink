@@ -1,0 +1,1 @@
+event bad = { from: Client, type: Reliable, call: SingleSync, data: string }

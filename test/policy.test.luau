@@ -93,14 +93,27 @@ return function(tiniest: Tiniest)
 		"Recursive types are not allowed"
 	)
 
-	do
+	const function nested_structs(count: number): string
 		local nested = "u8"
-		for _ = 1, 9 do
+		for _ = 1, count do
 			nested = `struct \{ a: {nested} \}`
 		end
 
-		rejects("nesting depth is limited", event("Client", nested), "Nesting is deeper than 8 levels")
+		return nested
 	end
+
+	passes("8 nested containers compile", event("Client", nested_structs(8)))
+	rejects(
+		"9 nested containers are rejected",
+		event("Client", nested_structs(9)),
+		"Containers are nested more than 8 deep"
+	)
+	rejects("scoped events are checked", `scope inner \{ {event("Client", "string")} \}`, "Strings need a byte bound")
+	rejects(
+		"the strict option cannot depend on a profile",
+		'@profile("release")\noption strict = false\n' .. event("Client", "u8"),
+		"The policy cannot depend on attributes"
+	)
 
 	rejects("client events cannot send buffers", event("Client", "buffer(..64)"), "clients cannot send opaque data")
 	rejects("both-way events cannot send buffers", event("Both", "buffer(..64)"), "clients cannot send opaque data")
@@ -129,6 +142,12 @@ return function(tiniest: Tiniest)
 		expect(function()
 			compile_fixture("imports_unbounded")
 		end).fails_with(escape("Strings need a byte bound"))
+	end)
+
+	test("imported events are checked", function()
+		expect(function()
+			compile_fixture("imports_event")
+		end).fails_with(escape("violation at bad.data"))
 	end)
 
 	test("imports of a lax contract may restate strict = false", function()

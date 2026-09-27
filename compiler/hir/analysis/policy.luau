@@ -14,6 +14,12 @@ type Hir = types.Hir
 type Parameter = types.Parameter
 
 const MAX_DEPTH = 8
+const CONTAINERS = table.freeze({
+	array = true,
+	map = true,
+	struct = true,
+	discriminated_union = true,
+})
 
 type Context = {
 	read hir: Hir,
@@ -44,10 +50,6 @@ local explore: (ctx: Context, tty: Ty, node: ast.Node, path: string, depth: numb
 function explore(ctx: Context, tty: Ty, node: ast.Node, path: string, depth: number)
 	const own_node: ast.Node = tty.node or node
 
-	if depth > MAX_DEPTH then
-		violation(own_node, path, `Nesting is deeper than {MAX_DEPTH} levels, flatten this type`)
-	end
-
 	const active = ctx.active
 	if active[tty] then
 		violation(own_node, path, "Recursive types are not allowed, their depth is unbounded")
@@ -56,6 +58,10 @@ function explore(ctx: Context, tty: Ty, node: ast.Node, path: string, depth: num
 	active[tty] = true
 
 	const kind = tty.kind
+	if CONTAINERS[kind] and depth >= MAX_DEPTH then
+		violation(own_node, path, `Containers are nested more than {MAX_DEPTH} deep, flatten this type`)
+	end
+
 	if kind == "reference" then
 		explore(ctx, lookup.ty_from_id(ctx.hir, tty.to), own_node, path, depth)
 	elseif kind == "type_instantiation" then
@@ -131,7 +137,7 @@ const function check_parameters(
 	for index, parameter in parameters do
 		const segment = parameter.name or tostring(index)
 		const path = if single and parameter.name == nil then root else `{root}.{segment}`
-		explore(ctx, lookup.ty_from_id(hir, parameter.ty_id), node, path, 1)
+		explore(ctx, lookup.ty_from_id(hir, parameter.ty_id), node, path, 0)
 	end
 
 	return ctx.uses_buffer
@@ -209,22 +215,28 @@ const function check_type(hir: Hir, decl: types.Type)
 		uses_buffer = false,
 	}
 
-	explore(ctx, lookup.ty_from_id(hir, decl.ty_id), decl.node, decl.name, 1)
+	explore(ctx, lookup.ty_from_id(hir, decl.ty_id), decl.node, decl.name, 0)
 end
 
-const function check_imported_options(hir: Hir, files: compilation.Files, entry_id: number)
+const function check_strict_options(hir: Hir, files: compilation.Files, entry_strict: boolean)
+	const entry_id = files.sorted_ids[#files.sorted_ids]
 	for file_id, file_ast in files.ast_map do
-		if file_id == entry_id then
-			continue
-		end
-
-		const file_options = hir.options[file_id]
-		if file_options == nil or file_options.strict ~= false then
-			continue
-		end
-
 		for _, stat in file_ast.body.statements do
-			if stat.kind == "option" and stat.name.value == "strict" then
+			if stat.kind ~= "option" or stat.name.value ~= "strict" then
+				continue
+			end
+
+			if #stat.attributes > 0 then
+				stat_violation(
+					stat,
+					codes.policy.Violation,
+					"The policy cannot depend on attributes",
+					'Remove the attributes here, every build must share one "strict" setting'
+				)
+			end
+
+			const value = stat.value
+			if entry_strict and file_id ~= entry_id and value.kind == "boolean" and value.value == false then
 				stat_violation(
 					stat,
 					codes.policy.Violation,
@@ -247,11 +259,12 @@ const function is_strict(hir: Hir, files: compilation.Files, requested: boolean?
 end
 
 const function enforce(hir: Hir, files: compilation.Files, requested: boolean?)
-	if not is_strict(hir, files, requested) then
+	const strict = is_strict(hir, files, requested)
+	check_strict_options(hir, files, strict)
+
+	if not strict then
 		return
 	end
-
-	check_imported_options(hir, files, files.sorted_ids[#files.sorted_ids])
 
 	for _, decl in hir.types do
 		check_type(hir, decl)
