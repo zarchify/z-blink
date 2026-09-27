@@ -38,6 +38,7 @@ return table.freeze({
 	from_files = hir_from_files,
 
 	follow = lookup.follow,
+	sorted_decls = lookup.sorted_decls,
 	file_options = lookup.file_options,
 	ty_from_id = lookup.ty_from_id,
 	decl_from_id = lookup.decl_from_id,

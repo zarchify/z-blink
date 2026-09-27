@@ -21,24 +21,30 @@ export type FnSet = {
 
 export type Context = {
 	fn_id: number,
+	ty_name_count: number,
 	read fn_map: { [FnId]: types.Fn },
 	read templates: { [string]: Readable<any>? },
 	read hashed_tys: { [number]: FnSet? },
 	read ty_fn_set_map: { [Ty]: FnSet },
+	read ty_names: { [Ty]: string },
 	read hir: Hir,
 	read profile: Profile,
+	read seed: string,
 }
 
-local function create(hir: Hir, profile: Profile): Context
+local function create(hir: Hir, profile: Profile, seed: string): Context
 	return {
 		fn_id = 1,
+		ty_name_count = 0,
 		fn_map = {},
 		globals = {},
 		templates = {},
 		hashed_tys = {},
 		ty_fn_set_map = {},
+		ty_names = {},
 		hir = hir,
 		profile = profile,
+		seed = seed,
 	}
 end
 
@@ -55,6 +61,19 @@ local function store_fn(ctx: Context, fn: types.Fn, fn_id: FnId?): FnId
 	return fn_id
 end
 
+--- Returns a name for `ty` that is unique within this compilation and stable across compilations.
+local function ty_name(ctx: Context, ty: Ty): string
+	local names = ctx.ty_names
+	local name = names[ty]
+	if name == nil then
+		name = tostring(ctx.ty_name_count)
+		ctx.ty_name_count += 1
+		names[ty] = name
+	end
+
+	return name
+end
+
 local function fn_from_id(ctx: Context, fn_id: FnId): types.Fn
 	local fn = ctx.fn_map[fn_id]
 	if fn == nil then
@@ -68,5 +87,6 @@ return table.freeze({
 	create = create,
 	store_fn = store_fn,
 	next_fn_id = next_fn_id,
+	ty_name = ty_name,
 	fn_from_id = fn_from_id,
 })

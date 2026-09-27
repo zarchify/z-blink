@@ -44,10 +44,6 @@ type Props = builder_types.Props
 
 local ALWAYS_TRUE = condition.equals(constant.truth, constant.truth)
 
-local function ty_identity(tty: Ty): string
-	return string.split(tostring(tty), ": ")[2]
-end
-
 --TODO: Make value optional when the solver is stable
 local builders: { [ty.TyKind]: TyBuilder }
 local function builder_from_ty(ty: Ty): TyBuilder
@@ -97,7 +93,7 @@ local function build_ty(ctx: Context, attributes: attributes.Attributes, tty: Ty
 	ctx.ty_fn_set_map[key_ty] = fn_set
 
 	-- build reader & writer
-	name = name or ty_identity(tty)
+	name = name or context.ty_name(ctx, tty)
 	local read_name = projection.index(globals.types_map, constant.from_value(`{prefixes.ty}read_{name}`))
 	local write_name = projection.index(globals.types_map, constant.from_value(`{prefixes.ty}write_{name}`))
 
@@ -239,7 +235,7 @@ builders.array = table.freeze({
 
 builders.struct = table.freeze({
 	read = function(props: ReadProps, block: Builder, struct: ty.Struct, into: Writeable<any>?): Register<any>
-		local identity = ty_identity(struct)
+		local identity = context.ty_name(props.ctx, struct)
 		local templates = props.ctx.templates
 		if templates[identity] == nil then
 			local template_fields = {}

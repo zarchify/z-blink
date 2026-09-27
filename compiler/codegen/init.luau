@@ -195,12 +195,35 @@ local function gen_condition(ctx: Context, condition: lir.Condition<any>)
 	gen_rvalue(ctx, condition.right)
 end
 
+--- Returns the entries of a keyed structure ordered by their constant keys, so emitted tables are stable.
+local function sorted_entries(values: { [any]: any }): { { key: any, value: any } }
+	local entries = {}
+	for key, value in values do
+		table.insert(entries, { key = key, value = value })
+	end
+
+	local function sort_key(key: any): string
+		if key.type == "constant" then
+			return `{type(key.value)}:{tostring(key.value)}`
+		end
+
+		return ""
+	end
+
+	table.sort(entries, function(a, b)
+		return sort_key(a.key) < sort_key(b.key)
+	end)
+
+	return entries
+end
+
 local function gen_structure(ctx: Context, structure: lir.Structure<any>)
 	local builder = ctx.builder
 
 	builder:append("{")
 	if structure.kind == "map" then
-		for key, value in structure.values do
+		for _, entry in sorted_entries(structure.values) do
+			local key, value = entry.key, entry.value
 			builder:append("[")
 			gen_rvalue(ctx, key)
 			builder:append("] = ")
@@ -213,7 +236,8 @@ local function gen_structure(ctx: Context, structure: lir.Structure<any>)
 			builder:append(",")
 		end
 	elseif structure.kind == "struct" then
-		for field, value in structure.values do
+		for _, entry in sorted_entries(structure.values) do
+			local field, value = entry.key, entry.value
 			builder:append("[")
 			gen_constant_with_qoutes(ctx, field)
 			builder:append("] = ")
@@ -846,7 +870,8 @@ local function from_lir(props: Props, target: compilation.Target): string
 	append_headers(builder)
 
 	populate_type_names(ctx)
-	for decl_id, ttype in hhir.types do
+	for _, ttype in hir.sorted_decls(hhir.types) do
+		local decl_id = ttype.id
 		local type_name = assert_panic(ctx.type_names[decl_id], "expected type to have a cached type name") :: string
 
 		builder:append("export type ")

@@ -68,8 +68,39 @@ local function follow(hir: Hir, ty: ty.Ty): ty.Ty
 	return ty
 end
 
+--- Returns the declaration's name prefixed by the names of its enclosing scopes.
+local function qualified_name(decl: Decl): string
+	local parts = { decl.name }
+	local scope = decl.scope
+	while scope and scope.scope do
+		table.insert(parts, 1, scope.name)
+		scope = scope.scope
+	end
+
+	return table.concat(parts, ".")
+end
+
+--- Returns the declarations of `map` in a stable order that does not depend on node or file ids.
+local function sorted_decls<K, T>(map: { [K]: T }): { T }
+	local list: { T } = {}
+	local keys: { [T]: string } = {}
+	for _, decl in map do
+		table.insert(list, decl)
+		local node = (decl :: any).node
+		keys[decl] = `{qualified_name(decl :: any)}\0{node.span.x}`
+	end
+
+	table.sort(list, function(a: T, b: T): boolean
+		return keys[a] < keys[b]
+	end)
+
+	return list
+end
+
 return table.freeze({
 	follow = follow,
+	sorted_decls = sorted_decls,
+	qualified_name = qualified_name,
 	file_options = file_options,
 
 	ty_from_id = ty_from_id,

@@ -16,6 +16,7 @@ local hir = require("@hir")
 local library = require("@builders/library")
 local panic = require("@util/panic")
 local projection = require("@builders/projection")
+local seeded_random = require("@util/seeded_random")
 local shuffle = require("@util/shuffle")
 local state = require("@builders/state")
 local strong_exhaustive_match = require("@util/strong_exhaustive_match")
@@ -974,8 +975,8 @@ local function build_receive_connection(ctx: Context, side: Side, receivables: {
 	end)
 end
 
-local function from_hir(hhir: Hir, profile: Profile): Lir
-	local ctx = context.create(hhir, profile)
+local function from_hir(hhir: Hir, profile: Profile, seed: string): Lir
+	local ctx = context.create(hhir, profile, seed)
 	local globals_map: { [string]: Readable<any> } = {}
 	local exports_map: ExportsMap = {}
 
@@ -985,8 +986,8 @@ local function from_hir(hhir: Hir, profile: Profile): Lir
 	globals_map[INVOCATIONS_BITSET.identifier] = EMPTY_BITSET
 
 	-- build types
-	for decl_id, decl in hhir.types do
-		exports_map[decl_id] = build_type(ctx, decl)
+	for _, decl in hir.sorted_decls(hhir.types) do
+		exports_map[decl.id] = build_type(ctx, decl)
 	end
 
 	-- build events
@@ -1005,9 +1006,10 @@ local function from_hir(hhir: Hir, profile: Profile): Lir
 			event_ids[index] = id
 		end
 
-		shuffle(event_ids)
+		shuffle(event_ids, seeded_random(seed))
 
-		for decl_id, decl in hhir.events do
+		for _, decl in hir.sorted_decls(hhir.events) do
+			local decl_id = decl.id
 			local type = decl.type
 			local is_reliable = type == "Reliable"
 
@@ -1041,7 +1043,8 @@ local function from_hir(hhir: Hir, profile: Profile): Lir
 			exports_map[decl_id] = build_event(ctx, decl, event_id)
 		end
 
-		for decl_id, decl in hhir.functs do
+		for _, decl in hir.sorted_decls(hhir.functs) do
+			local decl_id = decl.id
 			local event_id = next_event_id(event_ids)
 			exports_map[decl_id] = build_function(ctx, decl, event_id)
 

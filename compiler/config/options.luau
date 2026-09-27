@@ -50,6 +50,7 @@ local options = {
 
 	manual_replication = { kind = "boolean" :: "boolean" },
 	strict = { kind = "boolean" :: "boolean" },
+	remote_scope = { kind = "string" :: "string" },
 }
 
 export type FileOptions = MakeOptionsReal<typeof(options)>

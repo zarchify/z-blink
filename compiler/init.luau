@@ -108,6 +108,25 @@ local function report_import_io_error(err: fs.IOError, expr: ast.ExprString): ne
 		:error()
 end
 
+--[=[
+    Derives a stable identifier for a compiled contract from its source files and remote scope.
+    Recompiling the same sources always yields the same identifier.
+]=]
+local function contract_hash(files: Files, entry_options: FileOptions): string
+	local sources: { string } = {}
+	for _, file_id in files.sorted_ids do
+		local source_file = file.from_id(file_id)
+		if source_file then
+			table.insert(sources, buffer.tostring(source_file.buffer))
+		end
+	end
+
+	table.sort(sources)
+
+	local scope = entry_options.remote_scope or ""
+	return md5(`{scope}\0{table.concat(sources, "\0")}`)
+end
+
 local function file_to_ast(file: File): Ast
 	local tokens = lexer.tokenize(file)
 	return parser.parse(file, tokens)
@@ -231,18 +250,20 @@ local function compile_from_path(entry_path: Path, compile_options: CompileOptio
 	local files_hir = hir.from_files(files, profile, compile_options.strict)
 	local hir_elapsed = (os.clock() - hir_pin)
 
+	local entry_options = hir.file_options(files_hir, entry_file)
+	local hash = contract_hash(files, entry_options)
+
 	local lir_pin = os.clock()
-	local files_lir = lir.from_hir(files_hir, profile)
+	local files_lir = lir.from_hir(files_hir, profile, hash)
 	local lir_elapsed = (os.clock() - lir_pin)
 
 	local codegen_pin = os.clock()
 	local targets: Targets = {}
 	do
-		local entry_options = hir.file_options(files_hir, entry_file)
 		local codegen_props: codegen.Props = {
 			lir = files_lir,
 			hir = files_hir,
-			hash = md5(tostring(os.clock())),
+			hash = hash,
 			profile = profile,
 			entry_options = entry_options,
 		}
@@ -304,13 +325,14 @@ local function compile_contents(
 	}
 
 	local file_hir = hir.from_files(files, profile, compile_options.strict)
-	local file_lir = lir.from_hir(file_hir, profile)
-
 	local entry_options = hir.file_options(file_hir, mock_file)
+	local hash = contract_hash(files, entry_options)
+	local file_lir = lir.from_hir(file_hir, profile, hash)
+
 	local codegen_props: codegen.Props = {
 		hir = file_hir,
 		lir = file_lir,
-		hash = md5(tostring(os.clock())),
+		hash = hash,
 		profile = compile_options.profile,
 		entry_options = entry_options,
 	}

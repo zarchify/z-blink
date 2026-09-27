@@ -83,8 +83,8 @@ export type ScopeExport = types.ScopeExport
 export type Export = types.Export
 export type Lir = types.Lir
 
-local function lir_from_hir(hir: hir.Hir, profile: compilation.Profile): Lir
-	local lir = build.from_hir(hir, profile)
+local function lir_from_hir(hir: hir.Hir, profile: compilation.Profile, seed: string): Lir
+	local lir = build.from_hir(hir, profile, seed)
 	optimize.lir(lir)
 	return lir
 end
