@@ -251,6 +251,10 @@ function run_service_class.IsServer(self: RunServiceMock): boolean
 	return self.context == "Server"
 end
 
+function run_service_class.IsRunning(self: RunServiceMock): boolean
+	return true
+end
+
 local function create_run_service(context: Context): RunServiceMock
 	local run_service = (setmetatable(create_instance("RunService"), run_service_class) :: any) :: RunServiceMock
 	run_service.context = context
