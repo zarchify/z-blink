@@ -616,6 +616,8 @@ local function build_event(ctx: Context, decl: Event, event_id: number): EventEx
 					-- finally emit the error that we caught
 					block:call(library.error_rvalue(err))
 				end)
+
+				block:call(projection.call(globals.after_record, { prev_cursor, prev_unknown_length }))
 			end)
 		end
 	end
@@ -771,12 +773,46 @@ local function build_function(ctx: Context, decl: Function, event_id: number): F
 		local map_index = projection.field(INVOCATIONS, binary.add(bitset_index, constant.one))
 		block:store(library.coroutine.running(), map_index)
 
-		-- write function payload
-		block:call(library.buffer.u8.write(block:allocate(constant.one), id))
-		block:call(library.buffer.u8.write(block:allocate(constant.one), bitset_index))
-		for index, fn_set in data_fn_sets do
-			block:call_fn(fn_set.write, { block:parameter(index) }, {})
+		-- write function payload, undoing everything if serialization fails
+		const prev_cursor = block:store(OUTGOING.cursor)
+		const prev_unknown_length = block:store(unary.len(OUTGOING.unknown))
+
+		const write_data = fn.anonymous(fn_parameters, {}, function(block)
+			block:capture({ bitset_index })
+			block:call(library.buffer.u8.write(block:allocate(constant.one), id))
+			block:call(library.buffer.u8.write(block:allocate(constant.one), bitset_index))
+			for index, fn_set in data_fn_sets do
+				block:call_fn(fn_set.write, { block:parameter(index) }, {})
+			end
+		end)
+
+		const serdes_error = fn.anonymous({ ERROR_PARAMETER }, {}, function(block: builders.Builder)
+			const message = library.string.format(`Error serializing function "{decl.name}"\\n%*`, block:parameter(1))
+			block:rreturn({ blink_trace(message, 2) })
+		end)
+
+		const args = {}
+		for index in fn_parameters do
+			args[index] = block:parameter(index)
 		end
+
+		const success, err = unpack(block:store_mult(library.xpcall(write_data, serdes_error, unpack(args)), 2))
+		block:if_single(condition.equals(success, constant.falsity), function(block: Builder)
+			block:store(prev_cursor, OUTGOING.cursor)
+
+			const index = block:store(binary.add(prev_unknown_length, constant.one))
+			const unknown_length = block:store(unary.len(OUTGOING.unknown))
+			block:while_loop(condition.less_than_or(index, unknown_length), function(block: Builder)
+				block:store(constant.null, projection.field(OUTGOING.unknown, index))
+				block:store(binary.add(index, constant.one), index)
+			end)
+
+			block:store(constant.null, map_index)
+			toggle_bitset_index(block, bitset_index)
+			block:call(library.error_rvalue(err))
+		end)
+
+		block:call(projection.call(globals.after_record, { prev_cursor, prev_unknown_length }))
 
 		-- first value is a boolean indicating whether the server successfully processed the invocation
 		local return_values = block:store_mult(library.coroutine.yield(), #rreturn + 1)
@@ -1087,6 +1123,7 @@ local function from_hir(hhir: Hir, profile: Profile, seed: string): Lir
 		local packet_buffer = trim_outgoing_buffer(block)
 		block:call(library.RemoteEvent.fire_server(RELIABLE_EVENT, { packet_buffer, OUTGOING.unknown }))
 		block:store(constant.zero, OUTGOING.cursor)
+		block:store(constant.zero, globals.out_records)
 		block:call(library.table.clear(OUTGOING.unknown))
 	end)
 

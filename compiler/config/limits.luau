@@ -15,9 +15,9 @@ export type Limits = {
 const STRICT_DEFAULTS: Limits = table.freeze({
 	packet_bytes = 32768,
 	packet_instances = 256,
-	packets_per_second = 300,
+	packets_per_second = 600,
 	records_per_packet = 256,
-	records_per_second = 1200,
+	records_per_second = 3000,
 })
 
 const NO_LIMITS: Limits = table.freeze({})

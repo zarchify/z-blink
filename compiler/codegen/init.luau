@@ -3,7 +3,9 @@
 --!optimize 2
 
 local append_buffer_fns = require("@codegen/templates/append_buffer_fns")
-local append_client = require("@codegen/templates/append_client")
+local client_template = require("@codegen/templates/append_client")
+local append_client = client_template.append_client
+local append_client_flush = client_template.append_client_flush
 local append_headers = require("@self/templates/append_headers")
 local append_server = require("@codegen/templates/append_server")
 local compilation = require("@config/compilation")
@@ -920,6 +922,9 @@ local function from_lir(props: Props, target: compilation.Target): string
 	end
 
 	append_buffer_fns(builder)
+	if target == "client" then
+		append_client_flush(builder, limits.resolve(entry_options, hhir.strict))
+	end
 
 	for name, value in llir.globals do
 		builder:append("local ")

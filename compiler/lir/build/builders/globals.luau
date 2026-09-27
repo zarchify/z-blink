@@ -25,6 +25,8 @@ return table.freeze({
 	invocations_bitset = global<<number>>("invocations_bitset"),
 	dispatching = global<<boolean>>("dispatching"),
 	admit_record = global<<(any) -> boolean>>("admit_record"),
+	after_record = global<<(number, number) -> ()>>("after_record"),
+	out_records = global<<number>>("out_records"),
 
 	services = {
 		players = global<<Players>>("PLAYERS"),
