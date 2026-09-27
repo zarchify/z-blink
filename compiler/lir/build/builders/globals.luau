@@ -23,7 +23,7 @@ return table.freeze({
 	connections_map = global("connections"),
 	invocations_map = global("invocations"),
 	invocations_bitset = global<<number>>("invocations_bitset"),
-	dispatching = global<<boolean>>("dispatching"),
+	dispatching = global<<{ [thread]: true }>>("dispatching"),
 	admit_record = global<<(any) -> boolean>>("admit_record"),
 	after_record = global<<(number, number) -> ()>>("after_record"),
 	admit_queue = global<<(any, number) -> boolean>>("admit_queue"),

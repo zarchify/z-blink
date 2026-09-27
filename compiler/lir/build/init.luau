@@ -292,13 +292,13 @@ const function call_listener(
 )
 	if call_type == "SingleSync" or call_type == "ManySync" then
 		if flag_dispatch then
-			block:store(constant.truth, globals.dispatching)
+			block:store(constant.truth, projection.field(globals.dispatching, library.coroutine.running()))
 		end
 
 		block:call(projection.call(listener, values))
 
 		if flag_dispatch then
-			block:store(constant.from_value(false), globals.dispatching)
+			block:store(constant.null, projection.field(globals.dispatching, library.coroutine.running()))
 		end
 	else
 		block:call(library.task.spawn(listener, values))

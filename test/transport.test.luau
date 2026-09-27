@@ -26,6 +26,7 @@ type Session = {
 	player: any,
 	remote: any,
 	violations: { string },
+	server_errors: { string },
 	received: { number },
 	clock: { now: number },
 }
@@ -34,6 +35,7 @@ const function start(contents: string): Session
 	const targets = compiler.compile_contents(contents, { profile = "test" })
 	const clock = { now = 0 }
 
+	const server_errors: { string } = {}
 	const server_dm = setup_server()
 	const environment = table.clone(environment_mock(server_dm))
 	environment.os = table.freeze({
@@ -41,6 +43,17 @@ const function start(contents: string): Session
 			return clock.now
 		end,
 	})
+
+	const scheduler = table.clone(task) :: any
+	scheduler.spawn = function(callback: any, ...: any)
+		if callback == error then
+			table.insert(server_errors, tostring((...)))
+			return nil
+		end
+
+		return task.spawn(callback, ...)
+	end
+	environment.task = table.freeze(scheduler)
 
 	const server = luau.load(luau.compile(targets.server), "transport-server", environment)() :: any
 	const client_dm, player = setup_client(server_dm)
@@ -53,6 +66,7 @@ const function start(contents: string): Session
 		player = player,
 		remote = remote,
 		violations = {},
+		server_errors = server_errors,
 		received = {},
 		clock = clock,
 	}
@@ -258,6 +272,8 @@ return function(tiniest: Tiniest)
 
 		const ok = invoke_async(session, "lookup", 1)()
 		expect(ok).is(false)
+		expect(#session.server_errors).is(1)
+		expect(string.find(session.server_errors[1], "less than or equal to 255", 1, true) ~= nil).is(true)
 	end)
 
 	test("active invocations per player are limited", function()
@@ -360,6 +376,45 @@ return function(tiniest: Tiniest)
 		expect(function()
 			session.client.step_replication()
 		end).fails_with("handler bug")
+		expect(#session.violations).is(0)
+	end)
+
+	test("a yielding handler that errors after another packet arrives is not blamed on the client", function()
+		const contract = [[
+			option manual_replication = true
+			event slow = { from: Client, type: Reliable, call: SingleSync, data: u8 }
+			event ping = { from: Client, type: Reliable, call: SingleSync, data: u8 }
+		]]
+
+		const recorder = start(contract)
+		const packets: { buffer } = {}
+		recorder.remote.OnServerEvent:Connect(function(_, packet)
+			table.insert(packets, packet)
+		end)
+		recorder.client.exports.slow.fire(1)
+		recorder.client.step_replication()
+		recorder.client.exports.ping.fire(2)
+		recorder.client.step_replication()
+		expect(#packets).is(2)
+
+		const session = start(contract)
+		session.server.exports.slow.on(function()
+			coroutine.yield()
+			error("late handler bug")
+		end)
+
+		const slow_thread = coroutine.create(function()
+			send_raw(session, packets[1], {})
+		end)
+		coroutine.resume(slow_thread)
+		expect(coroutine.status(slow_thread)).is("suspended")
+
+		send_raw(session, packets[2], {})
+
+		const ok, message = coroutine.resume(slow_thread)
+		expect(ok).is(false)
+		expect(string.find(tostring(message), "late handler bug", 1, true) ~= nil).is(true)
+		expect(#session.received).is(1)
 		expect(#session.violations).is(0)
 	end)
 
