@@ -4,6 +4,8 @@
 <h1>Blink</h1>
 An IDL compiler written in Luau for ROBLOX buffer networking
 
+> **This is a hardened fork.** Contracts are checked against a security policy, client packets are validated and rate limited, and a project driver keeps generated files in sync. See [docs/hardened.md](docs/hardened.md).
+
 # Performance
 Blink aims to generate the most performant and bandwidth-efficient code for your specific experience, but what does this mean?  
 

@@ -2,6 +2,7 @@ local cli_builder = require("@packages/cli_builder")
 local colorful = require("@vendor/colorful")
 local compilation = require("@compiler/config/compilation")
 local compiler = require("@compiler")
+local driver = require("@self/driver")
 local fs = require("@util/fs")
 local hir = require("@compiler/hir")
 local path = require("@util/path")
@@ -142,6 +143,56 @@ local function on_compile(context: Context)
 	end
 end
 
+const PROBLEM_TEXT = {
+	missing = "is missing",
+	stale = "is out of date",
+	edited = "was edited by hand",
+	orphaned = "is no longer produced by any contract",
+	untracked = "is not recorded in the manifest",
+	interrupted = "records an interrupted generate",
+}
+
+const function on_generate(context: Context)
+	print(HEADER)
+	const config = driver.load_config(path.from_string(context.commandOptions.config))
+	const report = driver.generate(config)
+
+	if report.recovered then
+		printext.info("Recovered from an interrupted generate.")
+	end
+
+	for _, written in report.written do
+		printext.info(`Wrote "{written}"`)
+	end
+
+	for _, removed in report.removed do
+		printext.info(`Removed orphaned "{removed}"`)
+	end
+
+	for _, kept in report.kept do
+		printext.error(`Kept orphaned "{kept}" because it was edited by hand, delete it yourself if it is unused`)
+	end
+
+	printext.info(`{#report.written} written, {#report.unchanged} unchanged, {#report.removed} removed.`)
+end
+
+const function on_check(context: Context)
+	print(HEADER)
+	const config = driver.load_config(path.from_string(context.commandOptions.config))
+	const problems = driver.check(config)
+	if #problems == 0 then
+		printext.info("Every generated file is up to date.")
+		return
+	end
+
+	for _, problem in problems do
+		printext.error(`"{problem.path}" {PROBLEM_TEXT[problem.kind]}`)
+	end
+
+	printext.error(`{#problems} problem(s) found, run "blink generate" to fix them.`)
+	process.exit(1)
+end
+
 const function before_run(context: Context)
 	if context.globalOptions.verbose then
 		printext.verbose(format_options(context.commandOptions))
@@ -202,6 +253,38 @@ cli.new()
 					:setType("boolean")
 					:setDefaultValue(false)
 					:build()	
+			)
+			:build()
+	)
+	:addCommand(
+		command.new()
+			:setName("generate")
+			:setDescription("Compiles every contract in a project config and publishes the outputs atomically.")
+			:setCallback(on_generate)
+			:addOption(
+				option.new()
+					:setName("config")
+					:addAlias("c")
+					:setDescription("Path to the project config.")
+					:setType("string")
+					:setDefaultValue("blink.toml")
+					:build()
+			)
+			:build()
+	)
+	:addCommand(
+		command.new()
+			:setName("check")
+			:setDescription("Fails when a generated file is missing, stale, edited by hand or orphaned.")
+			:setCallback(on_check)
+			:addOption(
+				option.new()
+					:setName("config")
+					:addAlias("c")
+					:setDescription("Path to the project config.")
+					:setType("string")
+					:setDefaultValue("blink.toml")
+					:build()
 			)
 			:build()
 	)
