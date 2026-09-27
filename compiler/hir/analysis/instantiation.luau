@@ -38,7 +38,7 @@ local function transform(ctx: Context, tty: Ty): Ty
 	elseif tty.kind == "array" then
 		local of = transform(ctx, tty.of)
 		if tty.of ~= of then
-			return ty.array(tty.node, of)
+			return ty.array(tty.node, of, tty.size)
 		end
 	elseif tty.kind == "struct" then
 		local fields = table.clone(tty.fields)
