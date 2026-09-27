@@ -261,6 +261,14 @@ end
 const function enforce(hir: Hir, files: compilation.Files, requested: boolean?)
 	const strict = is_strict(hir, files, requested)
 	hir.strict = strict
+
+	const entry_options = hir.options[files.sorted_ids[#files.sorted_ids]]
+	const send_validation = entry_options and entry_options.send_validation
+	if send_validation ~= nil then
+		hir.send_validation = send_validation
+	elseif strict then
+		hir.send_validation = true
+	end
 	check_strict_options(hir, files, strict)
 
 	if not strict then

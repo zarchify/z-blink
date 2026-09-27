@@ -51,6 +51,7 @@ local options = {
 	manual_replication = { kind = "boolean" :: "boolean" },
 	strict = { kind = "boolean" :: "boolean" },
 	remote_scope = { kind = "string" :: "string" },
+	send_validation = { kind = "boolean" :: "boolean" },
 
 	max_packet_bytes = { kind = "number" :: "number" },
 	max_packet_instances = { kind = "number" :: "number" },

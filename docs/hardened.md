@@ -1,6 +1,6 @@
-# Hardened Blink
+# z-blink reference
 
-This fork of Blink treats every client as hostile. A contract that could be abused is rejected when it is compiled, and every packet a client sends is bounded, validated and rate limited before a handler sees it.
+z-blink treats every client as hostile. A contract that could be abused is rejected when it is compiled, and every packet a client sends is bounded, validated and rate limited before a handler sees it.
 
 Everything here is on by default. Upstream behaviour is one option away: see [Turning the policy off](#turning-the-policy-off).
 
@@ -42,7 +42,7 @@ Receiving, always on:
 - A map must not contain the same key twice, and must stay within its entry cap.
 - Unknown union variants are rejected.
 
-Sending, on in the `dev` and `test` profiles:
+Sending, on in every build profile for strict contracts:
 
 - An integer must be a whole number within its type's range, even without a declared range. Without this check, 300 sent as `u8` arrives as 44.
 - A struct must be a table and must not have fields the contract does not declare.
@@ -50,6 +50,14 @@ Sending, on in the `dev` and `test` profiles:
 - In strict contracts, a float must be finite and must fit its type.
 
 A send that fails validation is undone, so a bad call never corrupts the next packet.
+
+Send checks catch bugs in your own code and cost a few comparisons per field. If profiling shows they matter for a contract that sends a lot every frame, turn them off for that contract:
+
+```blink
+option send_validation = false
+```
+
+Receive checks cannot be turned off. Lax contracts (`strict = false`) follow upstream and skip send checks in the `release` profile.
 
 ## Transport limits
 
@@ -138,6 +146,6 @@ Both commands take `--config <path>`, which defaults to `blink.toml`.
 
 ## Turning the policy off
 
-`option strict = false` in the entry file restores upstream behaviour: no contract rules, no finite-number checks, and no transport limits unless you set a `max_*` option.
+`option strict = false` in the entry file restores upstream behaviour: no contract rules, no finite-number checks, no send checks in `release`, and no transport limits unless you set a `max_*` option.
 
 An imported file cannot set `strict = false` when the file importing it is strict. The `strict` option cannot carry attributes such as `@profile`, so every build of a contract shares one policy.

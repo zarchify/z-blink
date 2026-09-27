@@ -26,10 +26,15 @@ type point = struct { x: u8, y: u8 }
 type bytes = u8[..8]
 @export
 type command = union "kind" { move { x: u8 }, stop {} }
+@export
+type points = point[..2]
+type box<T> = struct { value: T }
+@export
+type boxes = box<u8>[..2]
 ]]
 
-const function load(profile: "test" | "release")
-	const targets = compiler.compile_contents(CONTRACT, { profile = profile })
+const function load(profile: "test" | "release", prefix: string?)
+	const targets = compiler.compile_contents((prefix or "") .. CONTRACT, { profile = profile })
 	return luau.load(luau.compile(targets.types), `hostile-{profile}`, environment_mock())().exports
 end
 
@@ -48,6 +53,8 @@ return function(tiniest: Tiniest)
 
 	const exports = load("test")
 	const release = load("release")
+	const unchecked = load("release", "option send_validation = false\n")
+	const lax_release = load("release", "option strict = false\n")
 
 	const function rejects_read(name: string, type_name: string, payload: buffer)
 		test(`read rejects {name}`, function()
@@ -114,6 +121,19 @@ return function(tiniest: Tiniest)
 	rejects_write("sparse arrays", "bytes", { 1, nil :: any, 3 })
 	rejects_write("arrays with extra keys", "bytes", { 1, 2, extra = 3 })
 	rejects_write("unknown union variant fields", "command", { kind = "stop", extra = 1 })
+	rejects_write("arrays of named structs beyond their cap", "points", table.create(3, { x = 1, y = 1 }))
+	rejects_write("arrays of generic structs beyond their cap", "boxes", table.create(3, { value = 1 }))
+
+	test("arrays of named structs keep their cap when read", function()
+		const valid = exports.points.write({ { x = 1, y = 2 } })
+		expect(buffer.readu8(valid, 0)).is(1)
+
+		const payload = buffer.create(1 + 3 * 2)
+		buffer.writeu8(payload, 0, 3)
+		expect(function()
+			exports.points.read(payload)
+		end).fails()
+	end)
 
 	test("valid values still round trip", function()
 		expect(exports.flag.read(exports.flag.write(true))).is(true)
@@ -134,9 +154,27 @@ return function(tiniest: Tiniest)
 		expect(list[3]).is(3)
 	end)
 
-	test("release builds do not corrupt the stream when arrays carry extra keys", function()
-		const encoded = release.bytes.write({ 1, 2, extra = 3 })
-		const decoded = release.bytes.read(encoded)
+	test("strict contracts validate sends in release builds", function()
+		expect(function()
+			release.byte.write(300)
+		end).fails()
+	end)
+
+	test("send_validation = false turns send checks off", function()
+		expect(function()
+			unchecked.byte.write(300)
+		end).never_fails()
+	end)
+
+	test("lax contracts keep upstream behaviour and skip send checks in release", function()
+		expect(function()
+			lax_release.byte.write(300)
+		end).never_fails()
+	end)
+
+	test("unvalidated sends do not corrupt the stream when arrays carry extra keys", function()
+		const encoded = unchecked.bytes.write({ 1, 2, extra = 3 })
+		const decoded = unchecked.bytes.read(encoded)
 		expect(#decoded).is(2)
 		expect(buffer.len(encoded)).is(3)
 	end)

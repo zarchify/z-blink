@@ -21,7 +21,7 @@ type Context = {
 	read commandArguments: { [string]: any },
 }
 
-local NAME = colorful.color.green("Blink")
+local NAME = colorful.color.green("z-blink")
 local HEADER = `{NAME} {version}`
 
 const PROFILE_STYLE = colorful.combineStyles({ colorful.modifier.bold, colorful.modifier.underline })
@@ -204,7 +204,7 @@ cli.new()
 	:setName(NAME)
 	:setVersion(version)
 	:setDescription("An IDL for defining structured data that compiles to fast Luau buffer serdes.")
-	:setGitRepository("https://github.com/1Axen/blink")
+	:setGitRepository("https://github.com/zarchify/z-blink")
 	:setEpilog("Example: blink compile <file>")
 	:setBeforeRunHook(before_run)
 	:addOption(

@@ -569,6 +569,7 @@ local function from_files(files: compilation.Files, profile: compilation.Profile
 		options = {},
 		entry_scope = entry_scope,
 		strict = true,
+		send_validation = profile ~= "release",
 	}
 
 	-- record all file options

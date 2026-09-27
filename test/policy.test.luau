@@ -119,6 +119,14 @@ return function(tiniest: Tiniest)
 	rejects("both-way events cannot send buffers", event("Both", "buffer(..64)"), "clients cannot send opaque data")
 	rejects("client events cannot be opaque", event("Client", "u8", "@opaque"), `Event "e" cannot be opaque`)
 	rejects("server buffers need @opaque", event("Server", "buffer(..64)"), "add @opaque to this event")
+	passes(
+		"arrays of named structs keep their cap",
+		"type item = struct { id: u16 }\n" .. event("Server", "item[..64]")
+	)
+	passes(
+		"arrays of generic instantiations keep their cap",
+		"type box<T> = struct { value: T }\n" .. event("Server", "box<u8>[..4]")
+	)
 	passes("server buffers with @opaque", event("Server", "buffer(..64)", "@opaque"))
 	rejects("unused @opaque", event("Server", "u8", "@opaque"), `Unused "@opaque" attribute`)
 	rejects("types cannot be opaque", "@opaque\ntype t = u8\n", "Types cannot be opaque")

@@ -87,6 +87,8 @@ export type Hir = {
 	read entry_scope: Scope,
 	--- whether the contract policy is enforced, set by the policy pass
 	strict: boolean,
+	--- whether generated code validates values before sending them, set by the policy pass
+	send_validation: boolean,
 }
 
 export type Decls = {
